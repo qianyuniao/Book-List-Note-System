@@ -1,0 +1,19 @@
+# 构建产物
+*.exe
+
+# 爬虫响应缓存（可再生，体积大）
+temp/
+
+# 登录凭证 —— 绝不提交
+cookie.txt
+
+# 日志与备份
+*.log
+*.bak
+
+# 工具可再生产物（scanempty 生成）
+empty_list.txt
+
+# IDE 私有配置
+.qoder/
+.vscode/

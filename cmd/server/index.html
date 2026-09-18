@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>书单笔记系统</title>
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="shortcut icon" type="image/png" href="/logo.png">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="window.__noMarked=1"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif; display: flex; flex-direction: column; overflow: hidden; background: #E9EDF4; }
+
+  /* 基础菜单栏（深色主题，与左侧栏同色系，桌面软件经典菜单） */
+  .menubar {
+    display: flex; align-items: center; height: 34px; min-height: 34px; padding: 0 8px;
+    background: linear-gradient(180deg, #242B38 0%, #1F2633 100%);
+    border-bottom: 1px solid #131821; font-size: 12.5px; color: #c9d2e0;
+    position: relative; z-index: 50;
+  }
+  .menu { position: relative; padding: 5px 12px; border-radius: 6px; cursor: default; user-select: none; border: 1px solid transparent; transition: background .12s; }
+  .mlogo { height: 30px; width: 30px; margin: 0 10px 0 4px; object-fit: contain; }
+  .menu:hover { background: #2C3547; color: #fff; }
+  .menu.open { background: #33405a; border-color: #3E4C68; color: #fff; }
+  .menu .dropdown {
+    display: none; position: absolute; top: calc(100% + 5px); left: 0; min-width: 216px; z-index: 60;
+    background: #fff; border: 1px solid #B7C2D4; border-radius: 9px; padding: 5px;
+    box-shadow: 0 12px 32px rgba(23,32,55,.24);
+  }
+  .menu.open .dropdown { display: block; }
+  .mi {
+    display: flex; justify-content: space-between; align-items: center; gap: 20px; width: 100%;
+    border: none; background: transparent; padding: 7px 10px; font-size: 12.5px; color: #232A36;
+    border-radius: 6px; cursor: pointer; text-align: left; font-family: inherit; line-height: 1.3;
+  }
+  .mi:hover { background: #DDE9FB; color: #16409E; }
+  .mi .kbd { color: #98a1b0; font-size: 11px; font-family: Consolas, monospace; white-space: nowrap; }
+  .msep { height: 1px; background: #DDE3EE; margin: 4px 8px; }
+  /* 二级子菜单（飞出的右侧面板） */
+  .mi.ms { position: relative; cursor: pointer; }
+  .mi.ms .arrow { color: #98a1b0; font-size: 11px; }
+  .mi.ms .sub {
+    display: none; position: absolute; left: calc(100% + 4px); top: -7px; min-width: 132px; z-index: 70;
+    background: #fff; border: 1px solid #B7C2D4; border-radius: 9px; padding: 5px;
+    box-shadow: 0 12px 32px rgba(23,32,55,.24);
+  }
+  .mi.ms:hover .sub { display: block; }
+  .infobody { font-size: 13px; color: #2A3242; line-height: 2; }
+  .infobody .k { display: inline-block; min-width: 92px; font-family: Consolas, monospace; font-size: 12px; color: #16409E; background: #E4EDFB; border: 1px solid #C3D4EE; border-radius: 5px; padding: 1px 8px; margin-right: 10px; }
+
+  /* 菜单栏右侧：统计 / 刷新 */
+  .mright { margin-left: auto; display: flex; align-items: center; gap: 8px; padding-right: 4px; }
+  .mstats { font-size: 12px; color: #8a94a6; }
+  .mbtn { border: 1px solid #3E4C68; background: #2C3547; color: #c9d2e0; font-size: 12px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: all .12s; }
+  .mbtn:hover { border-color: #4A83F5; color: #fff; background: #33405a; }
+
+  /* ---------- 主体 ---------- */
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* 左：深色书单侧栏 */
+  nav { width: 280px; min-width: 160px; max-width: 460px; background: #1F2633; color: #c9d2e0; display: flex; flex-direction: column; }
+  nav .searchrow { display: flex; align-items: center; gap: 6px; margin: 10px 12px 8px; position: relative; }
+  nav input {
+    flex: 1; min-width: 0; padding: 7px 11px; border: none; border-radius: 6px;
+    background: #2C3547; color: #fff; font-size: 13px; outline: none; font-family: inherit;
+  }
+  nav input:focus { box-shadow: 0 0 0 2px rgba(58,109,240,.4); }
+  nav input::placeholder { color: #6b7686; }
+
+  /* 分类小按钮 + 弹出面板 */
+  .catBtn {
+    width: 29px; height: 29px; min-width: 29px; border: none; border-radius: 7px; padding: 0;
+    background: #2C3547; color: #8a94a6; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .catBtn:hover { background: #33405a; color: #fff; }
+  .catBtn.on { background: #3A6DF0; color: #fff; }
+  .catpop {
+    position: absolute; top: 36px; left: 0; right: 0; z-index: 30; display: none;
+    background: #242B38; border: 1px solid #33405a; border-radius: 10px; padding: 10px 8px 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.45); animation: pop .12s ease-out;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .catpop.show { display: block; }
+  .catpop .cap { font-size: 11px; color: #6b7686; margin: 0 4px 7px; }
+  .chip {
+    display: inline-block; margin: 2px 3px; padding: 4px 10px; font-size: 12px; border-radius: 13px;
+    background: #2C3547; color: #c9d2e0; cursor: pointer; border: 1px solid transparent; font-family: inherit; transition: all .12s;
+  }
+  .chip:hover { background: #33405a; color: #fff; }
+  .chip.on { background: #3A6DF0; color: #fff; }
+  .chip .n { opacity: .65; font-size: 11px; margin-left: 4px; }
+  .chip.add { background: transparent; border: 1px dashed #5a6478; color: #9fb0cc; font-size: 13px; font-weight: bold; padding: 4px 12px; }
+  .chip.add:hover { border-color: #5C8DF6; color: #fff; background: #2C3547; }
+  .chip .x { margin-left: 6px; color: #8a94a6; font-weight: bold; }
+  .chip .x:hover { color: #ff8080; }
+  .catform { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .catform input { flex: 1 1 100%; background: #1B212B; border: 1px solid #3E4C68; color: #dfe6f2; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-family: inherit; outline: none; }
+  .catform input:focus { border-color: #3A6DF0; }
+  .catform .ops { margin-left: auto; }
+  /* 右键删除分类的上下文菜单（固定深色，与分类面板同色系） */
+  .ctxmenu { display: none; position: fixed; z-index: 130; min-width: 168px; background: #1B2841; border: 1px solid #33477A; border-radius: 9px; padding: 5px; box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+  .ctxmenu .citem { display: block; width: 100%; text-align: left; border: none; background: transparent; color: #DCE5F5; font-size: 12.5px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+  .ctxmenu .citem:hover { background: #2A3F66; color: #fff; }
+  nav .scroll { flex: 1; overflow-y: auto; padding: 2px 0 8px; }
+  nav .item { padding: 9px 14px; margin: 1px 8px; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; border-radius: 7px; transition: background .12s; }
+  nav .item:hover { background: #2C3547; }
+  nav .item.active { background: #3A6DF0; color: #fff; }
+  nav .item .cnt { color: #8a94a6; font-size: 12px; }
+  nav .item.active .cnt { color: #dbe4ff; }
+
+  /* 中：书籍列表（悬浮圆角卡片） */
+  .books {
+    width: 300px; min-width: 160px; max-width: 480px; background: #EBEFF7; display: flex; flex-direction: column;
+    margin: 10px 6px 10px 4px; border-radius: 14px; overflow: hidden;
+    border: 1px solid #D5DEEC; box-shadow: 0 6px 22px rgba(23,32,55,.12);
+  }
+  .books .head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px 10px 16px; font-size: 13px; font-weight: bold; color: #143A8E;
+    background: linear-gradient(90deg, #C6DAF7, #DCE9FB);
+    border-bottom: 2px solid #9DBDE8;
+  }
+  .tbtns { display: flex; gap: 6px; }
+  .tbtn {
+    width: 30px; height: 30px; border: 1.5px solid #AEB9CC; border-radius: 8px; padding: 0;
+    background: #fff; color: #3a4150; font-size: 15px; font-weight: bold; cursor: pointer; line-height: 1;
+    display: flex; align-items: center; justify-content: center; transition: all .12s;
+    box-shadow: 0 1px 3px rgba(31,38,51,.15);
+  }
+  .tbtn:hover { border-color: #2B5BD3; color: #2B5BD3; background: #EAF0FF; box-shadow: 0 2px 6px rgba(43,91,211,.25); }
+  .tbtn.on { background: #2B5BD3; border-color: #2B5BD3; color: #fff; box-shadow: 0 2px 8px rgba(58,109,240,.45); }
+  .books .scroll { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .books .b {
+    margin: 2px 9px; padding: 9px 12px; font-size: 13px; cursor: pointer; color: #26303F;
+    border-radius: 9px; transition: all .12s;
+  }
+  .books .b:hover { background: #DCE8FB; color: #1D4ED8; }
+  .books .b.active {
+    background: linear-gradient(90deg, #3A6DF0, #4A83F5); color: #fff; font-weight: bold;
+    box-shadow: 0 3px 10px rgba(58,109,240,.35);
+  }
+  .books .empty { padding: 18px; color: #7C8697; font-size: 13px; }
+
+  /* 拖拽分隔条（旧版 GridSplitter） */
+  .drag { width: 5px; min-width: 5px; background: #D2D9E4; cursor: col-resize; position: relative; transition: background .15s; flex: none; }
+  .drag:hover, .drag.on { background: #3A6DF0; }
+  body.dragging { user-select: none; cursor: col-resize; }
+
+  /* 工具按钮样式已并入书籍列表头部（.tbtns / .tbtn） */
+
+  .stage { flex: 1; display: flex; flex-direction: column; background: linear-gradient(180deg, #E2E8F2 0%, #EDF0F6 100%); overflow: hidden; }
+  article { flex: 1; overflow-y: auto; padding: 22px 30px; }
+  article .paper {
+    max-width: 900px; margin: 0 auto; background: #fff; border-radius: 12px;
+    border: 1px solid #D9E1EC; box-shadow: 0 10px 30px rgba(23,32,55,.14); padding: 30px 40px; min-height: calc(100% - 2px);
+  }
+  .placeholder { color: #7C8697; margin-top: 60px; text-align: center; font-size: 14px; line-height: 2.1; }
+  .md h2 { font-size: 24px; margin: 16px 0 8px; color: #1D4ED8; }
+  .md h3 { font-size: 16px; margin: 22px 0 8px; color: #1C2430; }
+  .md h3::before { content: '▍'; color: #2563EB; }
+  .md p { margin: 8px 0; line-height: 1.9; font-size: 14px; color: #22262C; text-indent: 2em; }
+  .md blockquote { margin: 8px 0; padding: 10px 16px; background: #EDF3FD; border-left: 3px solid #3A6DF0; color: #46536B; font-size: 13.5px; border-radius: 0 6px 6px 0; }
+  .md pre { background: #E9EEF6; color: #2A3242; padding: 12px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; }
+
+  .editpane { flex: 1; display: none; flex-direction: column; padding: 16px 30px; max-width: 960px; margin: 0 auto; width: 100%; }
+  .editpane.show { display: flex; }
+  .editpane .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .editpane .file { font-size: 13px; color: #3E485A; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn { padding: 5px 14px; font-size: 13px; border: 1px solid #B7C2D4; border-radius: 6px; background: #fff; color: #26303F; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: #E4ECFC; }
+  .btn.primary { background: #2563EB; border-color: #2563EB; color: #fff; }
+  .btn.primary:hover { background: #1D4ED8; }
+  .editpane textarea { flex: 1; resize: none; border: 1px solid #B7C2D4; border-radius: 8px; padding: 12px; font: 13px/1.7 Consolas, "Microsoft YaHei", monospace; color: #22262C; outline: none; background: #fff; }
+  .editpane textarea:focus { border-color: #2563EB; }
+
+  /* ---------- 状态栏 ---------- */
+  .statusbar { height: 26px; min-height: 26px; display: flex; align-items: center; padding: 0 14px; font-size: 12px; color: #3E485A; background: #DFE5EE; border-top: 1px solid #C6CFDC; gap: 16px; }
+  .statusbar .right { margin-left: auto; color: #6B7686; }
+
+  /* ---------- 弹窗 / 提示 ---------- */
+  .mask { position: fixed; inset: 0; background: rgba(15,20,30,.45); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .mask.show { display: flex; }
+  .modal { width: 420px; background: #fff; border: 1px solid #D9E1EC; border-radius: 12px; padding: 22px; box-shadow: 0 16px 48px rgba(15,23,42,.28); }
+  .modal h3 { font-size: 16px; margin-bottom: 14px; }
+  .modal label { font-size: 13px; color: #3E485A; display: block; margin: 10px 0 4px; }
+  .modal input, .modal textarea { width: 100%; padding: 6px 9px; border: 1px solid #B7C2D4; border-radius: 6px; font-size: 13px; font-family: inherit; outline: none; }
+  .modal input:focus, .modal textarea:focus { border-color: #2563EB; }
+  .modal textarea { height: 60px; resize: none; }
+  .modal .ops { margin-top: 18px; text-align: right; }
+  .modal .ops .btn { margin-left: 8px; }
+
+  .toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: #2b3241; color: #fff; font-size: 13px; padding: 8px 18px; border-radius: 20px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #A8B3C5; border-radius: 4px; }
+  nav ::-webkit-scrollbar-thumb { background: #3a4356; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- 黑夜主题（深海军蓝分层：背景最深 → 面板 → 卡片逐层提亮） ---------- */
+  body.dark { background: #0D1421; }
+  body.dark .menubar { background: linear-gradient(180deg, #182338 0%, #131C2E 100%); border-bottom-color: #0A111E; color: #DCE5F5; }
+  body.dark nav { background: #101A2B; }
+  body.dark nav input, body.dark .catBtn { background: #1E2C47; }
+  body.dark .catpop { background: #16223A; border-color: #33477A; }
+  body.dark .catform input { background: #101A2B; border-color: #33477A; }
+  body.dark .stage { background: linear-gradient(180deg, #111B2C 0%, #0D1421 100%); }
+  body.dark article .paper { background: #1B2841; border-color: #2E4166; box-shadow: 0 12px 36px rgba(0,0,0,.6); }
+  body.dark .md p { color: #E2E9F7; }
+  body.dark .md h2 { color: #8AB4FF; }
+  body.dark .md h3 { color: #F2F6FF; }
+  body.dark .md h3::before { color: #6D9EFF; }
+  body.dark .md blockquote { background: #223250; color: #B9C9E4; border-left-color: #5B8DEF; }
+  body.dark .md pre { background: #223250; color: #E2E9F7; }
+  body.dark .placeholder { color: #7C8DB0; }
+  body.dark .books { background: #152036; border-color: #2E4166; box-shadow: 0 6px 22px rgba(0,0,0,.55); }
+  body.dark .books .head { background: linear-gradient(90deg, #24375C, #1C2C4C); color: #AFCBFF; border-bottom-color: #33477A; }
+  body.dark .books .b { color: #DCE5F5; }
+  body.dark .books .b:hover { background: #223354; color: #AFCBFF; }
+  body.dark .books .b.active { background: linear-gradient(90deg, #3E77F0, #5A8DF7); box-shadow: 0 4px 14px rgba(93,140,245,.45); }
+  body.dark .books .empty { color: #7C8DB0; }
+  body.dark .tbtn { background: #223354; border-color: #3B5178; color: #DCE5F5; box-shadow: none; }
+  body.dark .tbtn:hover { border-color: #6D9EFF; color: #fff; background: #2A3F66; }
+  body.dark .tbtn.on { background: #3E77F0; border-color: #3E77F0; color: #fff; box-shadow: 0 2px 10px rgba(93,140,245,.5); }
+  body.dark .drag { background: #223354; }
+  body.dark .drag:hover, body.dark .drag.on { background: #6D9EFF; }
+  body.dark .menu .dropdown, body.dark .mi.ms .sub { background: #1B2841; border-color: #33477A; box-shadow: 0 12px 32px rgba(0,0,0,.6); }
+  body.dark .mi { color: #DCE5F5; }
+  body.dark .mi:hover { background: #2A3F66; color: #fff; }
+  body.dark .mi .kbd { color: #7C8DB0; }
+  body.dark .msep { background: #2A3F66; }
+  body.dark .chip { background: #223354; color: #DCE5F5; }
+  body.dark .chip:hover { background: #2A3F66; color: #fff; }
+  body.dark .chip.on { background: #3E77F0; }
+  body.dark .modal { background: #1B2841; border-color: #33477A; color: #E2E9F7; box-shadow: 0 16px 48px rgba(0,0,0,.7); }
+  body.dark .modal h3 { color: #F2F6FF; }
+  body.dark .modal label { color: #9FB0CC; }
+  body.dark .modal input, body.dark .modal textarea { background: #101A2B; border-color: #33477A; color: #E2E9F7; }
+  body.dark .infobody { color: #DCE5F5; }
+  body.dark .infobody .k { background: #223354; border-color: #3B5178; color: #AFCBFF; }
+  body.dark .btn { background: #223354; border-color: #3B5178; color: #DCE5F5; }
+  body.dark .btn:hover { background: #2A3F66; color: #fff; }
+  body.dark .btn.primary { background: #3E77F0; border-color: #3E77F0; color: #fff; }
+  body.dark .btn.primary:hover { background: #5A8DF7; }
+  body.dark .editpane .file { color: #9FB0CC; }
+  body.dark .editpane textarea { background: #101A2B; border-color: #33477A; color: #E2E9F7; }
+  body.dark .editpane textarea:focus { border-color: #6D9EFF; }
+  body.dark .statusbar { background: #0F1828; color: #9FB0CC; border-top-color: #0A111E; }
+  body.dark .statusbar .right { color: #7C8DB0; }
+  body.dark .mask { background: rgba(4,8,16,.62); }
+  body.dark .toast { background: #2A3F66; border: 1px solid #3B5178; }
+  body.dark ::-webkit-scrollbar-thumb { background: #33477A; }
+</style>
+</head>
+<body>
+
+<div class="menubar" id="menubar">
+  <img class="mlogo" src="/logo.png" alt="logo" title="书单笔记系统">
+  <div class="menu"><span data-i18n="mFile">文件(F)</span>
+    <div class="dropdown">
+      <button class="mi" data-act="refresh"><span data-i18n="miRefresh">重新扫描数据</span><span class="kbd">F5</span></button>
+<button class="mi" data-act="import"><span data-i18n="miImport">导入文件…</span><span class="kbd">Ctrl+O</span></button>
+      <div class="msep"></div>
+      <button class="mi" data-act="close"><span data-i18n="miExit">退出系统</span><span class="kbd">Alt+F4</span></button>
+    </div>
+  </div>
+  <div class="menu"><span data-i18n="mEdit">编辑(E)</span>
+    <div class="dropdown">
+      <button class="mi" data-act="edit"><span data-i18n="miEditBook">编辑当前书籍</span><span class="kbd">Ctrl+E</span></button>
+      <button class="mi" data-act="save"><span data-i18n="miSave">保存修改</span><span class="kbd">Ctrl+S</span></button>
+      <button class="mi" data-act="cancel"><span data-i18n="miCancelEdit">取消编辑</span></button>
+      <div class="msep"></div>
+      <button class="mi" data-act="add"><span data-i18n="miAdd">添加书籍…</span></button>
+      <button class="mi" data-act="del"><span data-i18n="miDel">删除书籍</span></button>
+    </div>
+  </div>
+  <div class="menu"><span data-i18n="mView">查看(V)</span>
+    <div class="dropdown">
+      <button class="mi" data-act="read"><span data-i18n="miReadMode">阅读模式</span><span class="kbd">⌂</span></button>
+      <button class="mi" data-act="edit"><span data-i18n="miEditMode">编辑模式</span><span class="kbd">✎</span></button>
+      <div class="msep"></div>
+      <button class="mi" data-act="full"><span data-i18n="miFull">全屏 / 退出全屏</span><span class="kbd">F11</span></button>
+    </div>
+  </div>
+  <div class="menu"><span data-i18n="mSettings">设置(S)</span>
+    <div class="dropdown">
+      <div class="mi ms"><span data-i18n="miLang">语言</span><span class="arrow">▸</span>
+        <div class="sub">
+          <button class="mi" data-act="lang-zh" id="miLangZh">✓ 中文</button>
+          <button class="mi" data-act="lang-en" id="miLangEn">English</button>
+        </div>
+      </div>
+      <div class="mi ms"><span data-i18n="miTheme">主题</span><span class="arrow">▸</span>
+        <div class="sub">
+          <button class="mi" data-act="theme-day" id="miThemeDay">☀ 白天</button>
+          <button class="mi" data-act="theme-night" id="miThemeNight">☾ 黑夜</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="menu"><span data-i18n="mHelp">帮助(H)</span>
+    <div class="dropdown">
+      <button class="mi" data-act="keys"><span data-i18n="miKeys">键盘快捷键说明</span></button>
+      <button class="mi" data-act="about"><span data-i18n="miAbout">关于 书单笔记系统</span></button>
+    </div>
+  </div>
+  <div class="mright">
+    <span class="mstats" id="headStats">加载中…</span>
+    <button class="mbtn" id="btnRefreshTop" data-i18n="btnRefresh" title="重新扫描 books/ 目录 (F5)">⟳ 刷新</button>
+  </div>
+</div>
+
+<div class="main">
+  <nav id="navPane">
+    <div class="searchrow">
+      <input id="search" data-i18n-ph="searchPh" placeholder="搜索书单…">
+      <button class="catBtn" id="catBtn" data-i18n-title="catFilter" title="按分类筛选">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
+      </button>
+      <div class="catpop" id="catPop"></div>
+    </div>
+    <div class="scroll" id="lists"></div>
+  </nav>
+
+  <div class="drag" data-pane="navPane" data-min="160" data-max="460" data-i18n-title="dragHint" title="拖动调整列宽"></div>
+
+  <div class="books" id="booksPane">
+    <div class="head">
+      <span id="bookHead" data-i18n="bookListHead">书籍列表</span>
+      <div class="tbtns">
+        <button class="tbtn on" id="tbRead" data-i18n-title="miReadMode" title="阅读模式">⌂</button>
+        <button class="tbtn" id="tbEdit" data-i18n-title="miEditBook" title="编辑当前书籍">✎</button>
+        <button class="tbtn" id="tbAdd" data-i18n-title="miAddBtn" title="添加书籍到当前书单">✚</button>
+        <button class="tbtn" id="tbDel" data-i18n-title="miDel" title="删除当前书籍">✕</button>
+      </div>
+    </div>
+    <div class="scroll" id="bookPane"><div class="empty" data-i18n="emptyPick">← 请选择书单</div></div>
+  </div>
+
+  <div class="drag" data-pane="booksPane" data-min="160" data-max="480" data-i18n-title="dragHint" title="拖动调整列宽"></div>
+
+  <div class="stage">
+    <article id="content"><div class="paper"><div class="placeholder" data-i18n="welcome">欢迎使用<br>请先在左侧选择书单，再在中间选择书籍查看热门划线笔记<br><br>⌂ 阅读 · ✎ 编辑（Ctrl+S）· ✚ 添加 · ✕ 删除<br>列边界可左右拖拽调整宽度</div></div></article>
+    <div class="editpane" id="editPane">
+      <div class="bar">
+        <span class="file" id="editFile"></span>
+        <button class="btn primary" id="btnSave" data-i18n="btnSave">保存 (Ctrl+S)</button>
+        <button class="btn" id="btnCancel" data-i18n="btnCancel">取消</button>
+      </div>
+      <textarea id="editBox" spellcheck="false"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="infoMask">
+  <div class="modal">
+    <h3 id="infoTitle"></h3>
+    <div class="infobody" id="infoBody"></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn primary" id="btnInfoOk" data-i18n="infoClose">关闭</button></div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="status" data-i18n="statusReady">就绪</span>
+  <span class="right" data-i18n="statusRight">数据来自本地 books/ 目录 · 端口 8327</span>
+</div>
+
+<div class="mask" id="addMask">
+  <div class="modal">
+    <h3><span data-i18n="addTitleTo">添加书籍到</span> <span id="addListName" style="color:#3a6df0"></span></h3>
+    <label data-i18n="fTitle">书名（必填）</label><input id="fTitle">
+    <label data-i18n="fAuthor">作者</label><input id="fAuthor">
+    <label data-i18n="fIntro">简介</label><textarea id="fIntro"></textarea>
+    <div class="ops">
+      <button class="btn" id="btnAddCancel" data-i18n="addCancel">取消</button>
+      <button class="btn primary" id="btnAddOk" data-i18n="addOk">创建并编辑</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileImport" style="display:none" accept=".md,.markdown,.txt,.text,.log,.html,.htm,.docx,.epub,.pdf,.json,.csv,.tsv">
+<div class="ctxmenu" id="ctxMenu"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+let allLists = [], curList = null, curBook = null;
+let editing = false, dirty = false, books = [];
+let curCat = '';
+
+// 书单自动分类：按顺序匹配关键词，命中即归类（新增书单也能自动落入）
+const CATS = [
+  { n: '外语英语', e: 'Foreign Language', r: /英文|英语/ },
+  { n: '金融投资', e: 'Finance & Investing', r: /投资|理财|基金|富爸爸|财务自由|经济|金融/ },
+  { n: '商业沟通', e: 'Business & Communication', r: /商业|管理|麦肯锡|运营|产品|销售|工作|职场|大佬|盖茨|演讲|沟通|表达|口才|写作|TED/ },
+  { n: '历史人文', e: 'History & Humanities', r: /历史|史|文明|讲谈社|理想国译丛|传记/ },
+  { n: '家庭情感', e: 'Family & Emotion', r: /父母|女性|女权|恋爱|婚姻/ },
+  { n: '科学健康', e: 'Science & Health', r: /中医|医学|病|健康|疫情|防控|科学|科普|骰子|计算机|通识|技术/ },
+  { n: '哲思社会', e: 'Philosophy & Society', r: /哲学|诸子|思想|思维|思考|逻辑|认知|人生|主义|政治|格局|社会|宗教/ },
+  { n: '文学艺术', e: 'Literature & Arts', r: /文学|小说|言情|古言|诗|戏剧|莎士比亚|茅盾|推理|悬疑|法医|漫画|经典|影视|电影|野犬|文豪|禁书|古籍|枕边|礼物|品读|原著|阿加莎|日本小书/ },
+  { n: '心理成长', e: 'Psychology & Growth', r: /心理|成长|自制|迷茫|修养|习惯|像鸟|你终将|成为你|自己/ },
+  { n: '学习方法', e: 'Learning Methods', r: /学习|方法|大学生|必读|技能|提升|能力|高效/ },
+];
+function catOf(name) {
+  for (const c of CATS) {
+    if (!c.custom && hiddenCats.includes(c.n)) continue; // 被右键删除的内置分类跳过匹配
+    if (c.r.test(name)) return c.n;
+  }
+  return '其他';
+}
+
+// 被删除的内置分类名（仅隐藏规则，可恢复）；自建分类删除则是真移除
+let hiddenCats = [];
+try { hiddenCats = JSON.parse(localStorage.getItem('bnHiddenCats') || '[]') || []; } catch (e) { hiddenCats = []; }
+// 内置分类重命名别名 {原名: 新名}（只改显示，不改匹配规则）
+let catAlias = {};
+try { catAlias = JSON.parse(localStorage.getItem('bnCatAlias') || '{}') || {}; } catch (e) { catAlias = {}; }
+
+// 用户自建分类：存 localStorage，关键词转正则后插到规则表最前（优先于内置规则命中）
+let customCats = [];
+try { customCats = JSON.parse(localStorage.getItem('bnCats') || '[]') || []; } catch (e) { customCats = []; }
+function kwToRe(kw) {
+  const parts = kw.split(/[,，、;；|\/\s]+/).filter(Boolean).map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(parts.length ? parts.join('|') : '\\uFFFF');
+}
+customCats.forEach(c => { try { CATS.unshift({ n: c.n, e: c.n, r: kwToRe(c.kw), custom: true }); } catch (e) {} });
+let catFormOpen = false;
+
+// ---------- 多语言（中/英）与主题（白天/黑夜） ----------
+let curLang = localStorage.getItem('bnLang') === 'en' ? 'en' : 'zh';
+const I18N = {
+  zh: {
+    mFile:'文件(F)', mEdit:'编辑(E)', mView:'查看(V)', mSettings:'设置(S)', mHelp:'帮助(H)',
+    miRefresh:'重新扫描数据', miExit:'退出系统', miEditBook:'编辑当前书籍', miSave:'保存修改', miCancelEdit:'取消编辑',
+    miAdd:'添加书籍…', miDel:'删除书籍', miAddBtn:'添加书籍到当前书单', miReadMode:'阅读模式', miEditMode:'编辑模式', miFull:'全屏 / 退出全屏',
+    miLang:'语言', miTheme:'主题', miKeys:'键盘快捷键说明', miAbout:'关于 书单笔记系统',
+    btnRefresh:'⟳ 刷新', searchPh:'搜索书单…', catFilter:'按分类筛选', dragHint:'拖动调整列宽',
+    bookListHead:'书籍列表', emptyPick:'← 请选择书单',
+    welcome:'欢迎使用<br>请先在左侧选择书单，再在中间选择书籍查看热门划线笔记<br><br>⌂ 阅读 · ✎ 编辑（Ctrl+S）· ✚ 添加 · ✕ 删除<br>列边界可左右拖拽调整宽度',
+    btnSave:'保存 (Ctrl+S)', btnCancel:'取消', infoClose:'关闭', statusReady:'就绪',
+    statusRight:'数据来自本地 books/ 目录 · 端口 8327',
+    addTitleTo:'添加书籍到', fTitle:'书名（必填）', fAuthor:'作者', fIntro:'简介', addOk:'创建并编辑', addCancel:'取消',
+    langZh:'中文', langEn:'English', themeDay:'☀ 白天', themeNight:'☾ 黑夜',
+    stats:(a,b)=>a+' 个书单 · '+b+' 篇书籍笔记', bookHead:n=>'书籍列表 · '+n+' 本',
+    loading:'加载中…', noNotes:'该书单暂无笔记文件', listPicked:n=>'已选书单「'+n+'」，从中间列表选择书籍查看划线笔记',
+    pickEdit:'请先在中间列表选择要编辑的书籍', editPrefix:'编辑：',
+    saved:t=>'已保存《'+t+'》', savedStatus:t=>'已保存：'+t+'.md', saveFail:'保存失败：',
+    pickAdd:'请先在左侧选择要添加书籍的书单', noTitle:'书名不能为空', added:t=>'已添加《'+t+'》',
+    addedTo:(t,l)=>'已添加《'+t+'》到书单 ['+l+']',
+    delPick:'请先在中间列表选择要删除的书籍', delQ:t=>'确定删除《'+t+'》的笔记文件？此操作不可恢复！', delFail:'删除失败：',
+    deleted:t=>'已删除《'+t+'》', refreshed:'已刷新', guardQ:'当前书籍有未保存的修改，确定放弃？', discardQ:'确定放弃未保存的修改？',
+    readFail:'读取失败：', winCloseFail:'窗口操作失败，请按 Alt+F4', f11hint:'请按 F11 全屏',
+    catAll:'全部', catCap:n=>'选择分类 · 共 '+n+' 个书单',
+    catAdd:'新建分类', catNamePh:'分类名称', catKwPh:'关键词（逗号分隔）', catOk:'添加', catCancel:'取消',
+    catNeed:'名称和关键词不能为空', catDup:'该分类名称已存在', catAdded:n=>'已创建分类「'+n+'」', catDel:'删除分类', catDelQ:n=>'删除分类「'+n+'」？书单文件不会被删除。',
+    ctxDel:n=>'删除「'+n+'」', ctxDelQ:n=>'删除内置分类「'+n+'」？其下书单将自动归入其他匹配分类，之后可右键「全部」恢复。', ctxDelOk:n=>'已删除分类「'+n+'」',
+    ctxRen:n=>'重命名「'+n+'」', ctxRenPrompt:n=>'输入新名称（当前：'+n+'）', ctxRenOk:n=>'已重命名为「'+n+'」', ctxRenBad:'新名称不合法或与现有分类重复',
+    ctxExpMd:'导出为 Markdown', ctxExpPdf:'导出为 PDF', ctxDelBook:n=>'删除「'+n+'」', renamed:n=>'已重命名为《'+n+'》', renFail:'重命名失败：',
+    exported:n=>'已导出：'+n, exportFail:'导出失败：', pdfHint:'请在打印对话框中将目标打印机选为“另存为 PDF”', popupBlock:'（弹窗被拦截，请允许弹出窗口）',
+    ctxRestore:n=>'↺ 恢复已删除的内置分类（'+n+'）', ctxRestoreQ:n=>'恢复全部 '+n+' 个已删除的内置分类？', ctxRestoreOk:'已恢复内置分类',
+    miImport:'导入文件…', importing:'导入中…', importOk:n=>'已导入《'+n+'》', importFail:'导入失败：', importPick:'请先在左侧选择目标书单，再导入文件',
+    keysTitle:'键盘快捷键说明',
+    keysBody:'<div><span class="k">Ctrl+S</span>保存当前编辑</div><div><span class="k">Ctrl+E</span>编辑当前书籍</div><div><span class="k">Ctrl+O</span>导入文件到当前书单</div><div><span class="k">Esc</span>关闭菜单 / 弹窗</div><div><span class="k">F5</span>重新扫描数据</div><div><span class="k">F11</span>全屏切换</div>',
+    aboutTitle:'关于 书单笔记系统',
+    aboutBody:'<div>版本：v1.0（本地单机版）</div><div>数据：本地 books/ 目录 · 服务端口 8327</div><div>技术：Go 标准库 + 浏览器应用模式，零第三方依赖</div><div>内容：微信读书热门收藏书单划线笔记 + 手动笔记</div>',
+  },
+  en: {
+    mFile:'File(F)', mEdit:'Edit(E)', mView:'View(V)', mSettings:'Settings(S)', mHelp:'Help(H)',
+    miRefresh:'Rescan Data', miExit:'Exit', miEditBook:'Edit Current Book', miSave:'Save Changes', miCancelEdit:'Cancel Editing',
+    miAdd:'Add Book…', miDel:'Delete Book', miAddBtn:'Add a book to current list', miReadMode:'Read Mode', miEditMode:'Edit Mode', miFull:'Fullscreen / Exit Fullscreen',
+    miLang:'Language', miTheme:'Theme', miKeys:'Keyboard Shortcuts', miAbout:'About Book Notes',
+    btnRefresh:'⟳ Refresh', searchPh:'Search booklists…', catFilter:'Filter by category', dragHint:'Drag to resize column',
+    bookListHead:'Book List', emptyPick:'← Pick a booklist',
+    welcome:'Welcome<br>Pick a booklist on the left, then a book in the middle panel to view highlights<br><br>⌂ Read · ✎ Edit (Ctrl+S) · ✚ Add · ✕ Delete<br>Drag column borders to resize',
+    btnSave:'Save (Ctrl+S)', btnCancel:'Cancel', infoClose:'Close', statusReady:'Ready',
+    statusRight:'Data from local books/ folder · port 8327',
+    addTitleTo:'Add book to', fTitle:'Title (required)', fAuthor:'Author', fIntro:'Intro', addOk:'Create & Edit', addCancel:'Cancel',
+    langZh:'中文', langEn:'English', themeDay:'☀ Day', themeNight:'☾ Night',
+    stats:(a,b)=>a+' lists · '+b+' book notes', bookHead:n=>'Book List · '+n,
+    loading:'Loading…', noNotes:'No notes in this list yet', listPicked:n=>'List «'+n+'» selected — pick a book in the middle panel',
+    pickEdit:'Select a book to edit first', editPrefix:'Edit: ',
+    saved:t=>'Saved «'+t+'»', savedStatus:t=>'Saved: '+t+'.md', saveFail:'Save failed: ',
+    pickAdd:'Select a booklist to add into first', noTitle:'Title is required', added:t=>'Added «'+t+'»',
+    addedTo:(t,l)=>'Added «'+t+'» to list ['+l+']',
+    delPick:'Select a book to delete first', delQ:t=>'Delete notes of «'+t+'»? This cannot be undone!', delFail:'Delete failed: ',
+    deleted:t=>'Deleted «'+t+'»', refreshed:'Refreshed', guardQ:'Unsaved changes exist. Discard them?', discardQ:'Discard unsaved changes?',
+    readFail:'Load failed: ', winCloseFail:'Window op failed, press Alt+F4', f11hint:'Press F11 for fullscreen',
+    catAll:'All', catCap:n=>'Categories · '+n+' lists',
+    catAdd:'New category', catNamePh:'Category name', catKwPh:'Keywords (comma separated)', catOk:'Add', catCancel:'Cancel',
+    catNeed:'Name and keywords are required', catDup:'Category name already exists', catAdded:n=>'Category «'+n+'» created', catDel:'Delete category', catDelQ:n=>'Delete category «'+n+'»? Booklist files are not affected.',
+    ctxDel:n=>'Delete “'+n+'”', ctxDelQ:n=>'Remove built-in category “'+n+'”? Its booklists will be reclassified automatically; right-click “All” to restore.', ctxDelOk:n=>'Category “'+n+'” removed',
+    ctxRen:n=>'Rename “'+n+'”', ctxRenPrompt:n=>'New name (current: '+n+')', ctxRenOk:n=>'Renamed to “'+n+'”', ctxRenBad:'Invalid name or duplicate of an existing category',
+    ctxExpMd:'Export as Markdown', ctxExpPdf:'Export as PDF', ctxDelBook:n=>'Delete “'+n+'”', renamed:n=>'Renamed to «'+n+'»', renFail:'Rename failed: ',
+    exported:n=>'Exported: '+n, exportFail:'Export failed: ', pdfHint:'Choose “Save as PDF” as the printer in the dialog', popupBlock:'(popup was blocked, please allow popups)',
+    ctxRestore:n=>'↺ Restore deleted ('+n+')', ctxRestoreQ:n=>'Restore all '+n+' deleted built-in categories?', ctxRestoreOk:'Built-in categories restored',
+    miImport:'Import File…', importing:'Importing…', importOk:n=>'Imported «'+n+'»', importFail:'Import failed: ', importPick:'Select a target booklist first, then import',
+    keysTitle:'Keyboard Shortcuts',
+    keysBody:'<div><span class="k">Ctrl+S</span>Save current edit</div><div><span class="k">Ctrl+E</span>Edit current book</div><div><span class="k">Ctrl+O</span>Import file into current list</div><div><span class="k">Esc</span>Close menu / dialog</div><div><span class="k">F5</span>Rescan data</div><div><span class="k">F11</span>Toggle fullscreen</div>',
+    aboutTitle:'About Book Notes',
+    aboutBody:'<div>Version: v1.0 (local standalone)</div><div>Data: local books/ folder · port 8327</div><div>Stack: Go standard library + browser app mode, zero dependencies</div><div>Content: WeRead hot booklist highlights + manual notes</div>',
+  },
+};
+function t(k) { const v = I18N[curLang][k]; return v !== undefined ? v : I18N.zh[k]; }
+function catLabel(n) {
+  if (curLang === 'zh') return n;
+  const c = CATS.find(c => c.n === n);
+  return c ? c.e : 'Other';
+}
+function applyStaticTexts() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  document.title = curLang === 'zh' ? '书单笔记系统' : 'Book Notes';
+}
+function updateMenuChecks() {
+  const night = document.body.classList.contains('dark');
+  $('miLangZh').textContent = (curLang === 'zh' ? '✓ ' : '　') + t('langZh');
+  $('miLangEn').textContent = (curLang === 'en' ? '✓ ' : '　') + t('langEn');
+  $('miThemeDay').textContent = (!night ? '✓ ' : '　') + t('themeDay');
+  $('miThemeNight').textContent = (night ? '✓ ' : '　') + t('themeNight');
+}
+function setLang(l) {
+  curLang = l; localStorage.setItem('bnLang', l);
+  applyStaticTexts(); updateMenuChecks();
+  if (allLists.length) {
+    const total = allLists.reduce((s, x) => s + x.count, 0);
+    $('headStats').textContent = t('stats')(allLists.length, total);
+    renderCatChips(); renderLists($('search').value);
+  }
+  if (curList && books.length) $('bookHead').textContent = t('bookHead')(books.length);
+  if (curBook && !editing) showContent(curList, curBook);
+  else if (!curBook) placeholder(t('welcome'));
+}
+function setTheme(v) {
+  document.body.classList.toggle('dark', v === 'night');
+  localStorage.setItem('bnTheme', v);
+  updateMenuChecks();
+}
+
+function renderCatChips() {
+  const pop = $('catPop');
+  const counts = { };
+  allLists.forEach(l => { const c = catOf(l.name); counts[c] = (counts[c] || 0) + 1; });
+  const isCustom = n => CATS.some(c => c.n === n && c.custom);
+  const dispName = n => catLabel(catAlias[n] || n);
+  const names = CATS.filter(c => c.custom || !hiddenCats.includes(c.n)).map(c => c.n).concat(['其他']).filter(n => counts[n] || isCustom(n));
+  pop.innerHTML = '';
+  const cap = document.createElement('div');
+  cap.className = 'cap'; cap.textContent = t('catCap')(allLists.length);
+  pop.appendChild(cap);
+  const mk = (val, label, num, custom) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (curCat === val ? ' on' : '');
+    b.textContent = label;
+    if (num != null) { const n = document.createElement('span'); n.className = 'n'; n.textContent = num; b.appendChild(n); }
+    if (custom) {
+      const x = document.createElement('span');
+      x.className = 'x'; x.textContent = '×'; x.title = t('catDel');
+      x.onclick = ev => { ev.stopPropagation(); deleteCat(val, true); };
+      b.appendChild(x);
+    }
+    b.onclick = ev => {
+      ev.stopPropagation();
+      curCat = val;
+      $('catBtn').classList.toggle('on', !!val);
+      renderCatChips();
+      renderLists($('search').value);
+    };
+    // 右键：内置/自建分类都可重命名、删除；右键「全部」可恢复已删除的内置分类
+    b.oncontextmenu = ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (val === '') {
+        if (hiddenCats.length) showCtx(ev.clientX, ev.clientY, [{ label: t('ctxRestore')(hiddenCats.length), fn: restoreHidden }]);
+      } else if (val !== '其他') {
+        showCtx(ev.clientX, ev.clientY, [
+          { label: t('ctxRen')(label), fn: () => renameCat(val, custom, label) },
+          { label: t('ctxDel')(label), fn: () => deleteCat(val, custom, label) },
+        ]);
+      }
+    };
+    pop.appendChild(b);
+  };
+  mk('', t('catAll'));
+  names.forEach(n => mk(n, dispName(n), counts[n] || 0, isCustom(n)));
+  // ＋ 新建分类按钮
+  const add = document.createElement('button');
+  add.className = 'chip add'; add.textContent = '＋'; add.title = t('catAdd');
+  add.onclick = ev => {
+    ev.stopPropagation();
+    catFormOpen = !catFormOpen;
+    renderCatChips();
+    if (catFormOpen) { const f = $('ncName'); if (f) f.focus(); }
+  };
+  pop.appendChild(add);
+  // 内联新建表单
+  if (catFormOpen) {
+    const form = document.createElement('div');
+    form.className = 'catform';
+    form.innerHTML = '<input id="ncName" placeholder="' + t('catNamePh') + '">' +
+      '<input id="ncKw" placeholder="' + t('catKwPh') + '">' +
+      '<div class="ops"><button class="chip" id="ncNo">' + t('catCancel') + '</button>' +
+      '<button class="chip on" id="ncOk">' + t('catOk') + '</button></div>';
+    pop.appendChild(form);
+    $('ncOk').onclick = ev => { ev.stopPropagation(); submitNewCat(); };
+    $('ncNo').onclick = ev => { ev.stopPropagation(); catFormOpen = false; renderCatChips(); };
+    $('ncKw').onkeydown = ev => { if (ev.key === 'Enter') submitNewCat(); };
+    form.oninput = () => { catFormDraft = { name: $('ncName').value, kw: $('ncKw').value }; };
+    const nn = $('ncName');
+    if (catFormDraft.name) nn.value = catFormDraft.name;
+    if (catFormDraft.kw) $('ncKw').value = catFormDraft.kw;
+  }
+}
+
+let catFormDraft = { name: '', kw: '' };
+
+// ---------- 右键菜单：删除分类 / 恢复内置分类 ----------
+let ctxTimer = null;
+function showCtx(x, y, items) {
+  clearTimeout(ctxTimer);
+  const m = $('ctxMenu');
+  m.innerHTML = '';
+  items.forEach(it => {
+    const b = document.createElement('button');
+    b.className = 'citem'; b.textContent = it.label;
+    b.onclick = ev => { ev.stopPropagation(); hideCtx(); it.fn(); };
+    m.appendChild(b);
+  });
+  m.style.display = 'block';
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 6)) + 'px';
+  m.style.top = Math.max(4, Math.min(y, innerHeight - r.height - 6)) + 'px';
+}
+function hideCtx() { clearTimeout(ctxTimer); $('ctxMenu').style.display = 'none'; }
+// 鼠标移开菜单 → 延迟 2 秒自动收起；移回菜单则取消计时（此处早于 $ 声明，必须用原生 API）
+document.getElementById('ctxMenu').addEventListener('mouseenter', () => clearTimeout(ctxTimer));
+document.getElementById('ctxMenu').addEventListener('mouseleave', () => { clearTimeout(ctxTimer); ctxTimer = setTimeout(hideCtx, 2000); });
+
+function deleteCat(n, custom, disp) {
+  const d = disp || n;
+  if (custom) {
+    if (!confirm(t('catDelQ')(d))) return;
+    customCats = customCats.filter(c => c.n !== n);
+    localStorage.setItem('bnCats', JSON.stringify(customCats));
+    const i = CATS.findIndex(c => c.n === n && c.custom);
+    if (i >= 0) CATS.splice(i, 1);
+  } else {
+    if (!confirm(t('ctxDelQ')(d))) return;
+    hiddenCats.push(n);
+    localStorage.setItem('bnHiddenCats', JSON.stringify(hiddenCats));
+  }
+  if (curCat === n) { curCat = ''; $('catBtn').classList.remove('on'); }
+  renderCatChips(); renderLists($('search').value);
+  toast(t('ctxDelOk')(d));
+}
+// 重命名：自建分类直接改存储里的名字；内置分类写别名（匹配规则不变，只换显示）
+function renameCat(n, custom, disp) {
+  const old = disp || n;
+  const neu = (prompt(t('ctxRenPrompt')(old), old) || '').trim();
+  if (!neu || neu === old) return;
+  if (neu === '其他' || neu === '全部' || CATS.some(c => c.n === neu) || Object.values(catAlias).includes(neu)) { toast(t('ctxRenBad')); return; }
+  if (custom) {
+    const c = customCats.find(c => c.n === n);
+    if (c) c.n = neu;
+    localStorage.setItem('bnCats', JSON.stringify(customCats));
+    const r = CATS.find(x => x.n === n && x.custom);
+    if (r) { r.n = neu; r.e = neu; }
+    if (curCat === n) curCat = neu;
+  } else {
+    catAlias[n] = neu;
+    localStorage.setItem('bnCatAlias', JSON.stringify(catAlias));
+  }
+  renderCatChips(); renderLists($('search').value);
+  toast(t('ctxRenOk')(neu));
+}
+function restoreHidden() {
+  if (!confirm(t('ctxRestoreQ')(hiddenCats.length))) return;
+  hiddenCats = [];
+  localStorage.removeItem('bnHiddenCats');
+  renderCatChips(); renderLists($('search').value);
+  toast(t('ctxRestoreOk'));
+}
+
+function submitNewCat() {
+  const n = $('ncName').value.trim(), kw = $('ncKw').value.trim();
+  catFormDraft = { name: n, kw: kw };
+  if (!n || !kw) { toast(t('catNeed')); return; }
+  if (CATS.some(c => c.n === n) || Object.values(catAlias).includes(n) || n === '其他') { toast(t('catDup')); return; }
+  customCats.push({ n, kw });
+  localStorage.setItem('bnCats', JSON.stringify(customCats));
+  CATS.unshift({ n, e: n, r: kwToRe(kw), custom: true });
+  catFormOpen = false; catFormDraft = { name: '', kw: '' };
+  renderCatChips(); renderLists($('search').value);
+  toast(t('catAdded')(n));
+}
+
+const $ = id => document.getElementById(id);
+
+function status(msg) { $('status').textContent = msg; }
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function api(path, body) {
+  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined;
+  const res = await fetch(path, opt);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+// ---------- 列宽拖拽（旧版 GridSplitter 等效） ----------
+document.querySelectorAll('.drag').forEach(d => {
+  const pane = $(d.dataset.pane);
+  d.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX, startW = pane.offsetWidth;
+    const min = +d.dataset.min, max = +d.dataset.max;
+    d.classList.add('on');
+    document.body.classList.add('dragging');
+    const move = ev => { pane.style.width = Math.min(max, Math.max(min, startW + ev.clientX - startX)) + 'px'; };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      d.classList.remove('on');
+      document.body.classList.remove('dragging');
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+});
+
+// ---------- 列表加载 ----------
+async function loadLists() {
+  allLists = await api('/api/booklists');
+  const total = allLists.reduce((s, l) => s + l.count, 0);
+  $('headStats').textContent = t('stats')(allLists.length, total);
+  renderCatChips();
+  renderLists($('search').value);
+}
+
+function renderLists(kw) {
+  kw = (kw || '').toLowerCase();
+  const el = $('lists');
+  el.innerHTML = '';
+  allLists.filter(l => (!kw || l.name.toLowerCase().includes(kw)) && (!curCat || catOf(l.name) === curCat)).forEach(l => {
+    const d = document.createElement('div');
+    d.className = 'item' + (l.name === curList ? ' active' : '');
+    const s1 = document.createElement('span'); s1.textContent = l.name;
+    const s2 = document.createElement('span'); s2.className = 'cnt'; s2.textContent = l.count;
+    d.append(s1, s2);
+    d.onclick = async () => {
+      if (!(await guardDiscard())) return;
+      curList = l.name; curBook = null;
+      renderLists($('search').value);
+      loadBooks(l.name);
+      exitEdit();
+      placeholder(t('listPicked')(l.name));
+      status('书单 [' + l.name + ']');
+    };
+    el.appendChild(d);
+  });
+}
+
+async function loadBooks(list) {
+  const pane = $('bookPane');
+  pane.innerHTML = '<div class="empty">' + t('loading') + '</div>';
+  books = await api('/api/books?list=' + encodeURIComponent(list)) || [];
+  pane.innerHTML = '';
+  $('bookHead').textContent = t('bookHead')(books.length);
+  if (!books.length) { pane.innerHTML = '<div class="empty">' + t('noNotes') + '</div>'; return; }
+  books.forEach(b => {
+    const d = document.createElement('div');
+    d.className = 'b' + (b.title === curBook ? ' active' : '');
+    d.textContent = b.title;
+    d.onclick = async () => {
+      if (!(await guardDiscard())) return;
+      curBook = b.title;
+      loadBooks(list);
+      showContent(list, b.title);
+      status(list + ' · ' + b.title);
+    };
+    // 右键：重命名 / 导出 MD / 导出 PDF / 删除
+    d.oncontextmenu = ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      showCtx(ev.clientX, ev.clientY, [
+        { label: t('ctxRen')(b.title), fn: () => renameBook(b.title) },
+        { label: t('ctxExpMd'), fn: () => exportBook(b.title, 'md') },
+        { label: t('ctxExpPdf'), fn: () => exportBook(b.title, 'pdf') },
+        { label: t('ctxDelBook')(b.title), fn: () => delBookAt(b.title) },
+      ]);
+    };
+    pane.appendChild(d);
+  });
+}
+
+function placeholder(html) {
+  $('content').innerHTML = '<div class="paper"><div class="placeholder">' + html + '</div></div>';
+}
+
+// 内置轻量 Markdown 渲染器：CDN 不可用时的离线回退（标题/引用/段落，段落首行缩进由 CSS 控制）
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function simpleMarkdown(src) {
+  const out = []; let para = [];
+  const flush = () => { if (para.length) { out.push('<p>' + esc(para.join(' ')) + '</p>'); para = []; } };
+  src.split(/\r?\n/).forEach(line => {
+    const t = line.trim();
+    if (!t) { flush(); return; }
+    if (t.startsWith('### ')) { flush(); out.push('<h3>' + esc(t.slice(4)) + '</h3>'); }
+    else if (t.startsWith('## ')) { flush(); out.push('<h2>' + esc(t.slice(3)) + '</h2>'); }
+    else if (t.startsWith('# ')) { flush(); out.push('<h2>' + esc(t.slice(2)) + '</h2>'); }
+    else if (t.startsWith('>')) { flush(); out.push('<blockquote>' + esc(t.replace(/^>\s?/, '')) + '</blockquote>'); }
+    else para.push(t);
+  });
+  flush();
+  return out.join('\n');
+}
+
+async function showContent(list, title) {
+  const art = $('content');
+  art.innerHTML = '<div class="paper"><div class="placeholder">' + t('loading') + '</div></div>';
+  try {
+    const data = await api('/api/content?list=' + encodeURIComponent(list) + '&title=' + encodeURIComponent(title));
+    let md = data.markdown;
+    if (window.__noMarked || typeof marked === 'undefined') {
+      md = simpleMarkdown(md);
+    } else {
+      md = marked.parse(md);
+    }
+    art.innerHTML = '<div class="paper"><div class="md">' + md + '</div></div>';
+    art.scrollTop = 0;
+  } catch (e) {
+    placeholder(t('readFail') + e.message);
+  }
+}
+
+// ---------- 阅读 / 编辑模式 ----------
+function setReadMode(on) {
+  editing = !on;
+  $('tbRead').classList.toggle('on', on);
+  $('tbEdit').classList.toggle('on', !on);
+  $('editPane').classList.toggle('show', !on);
+  $('content').style.display = on ? '' : 'none';
+}
+
+function exitEdit() { dirty = false; if (editing) setReadMode(true); }
+
+function guardDiscard() {
+  if (!editing || !dirty) return true;
+  return confirm(t('guardQ'));
+}
+
+async function enterEdit() {
+  if (!curBook) { toast(t('pickEdit')); return; }
+  const data = await api('/api/content?list=' + encodeURIComponent(curList) + '&title=' + encodeURIComponent(curBook));
+  $('editBox').value = data.markdown;
+  $('editFile').textContent = t('editPrefix') + curList + ' / ' + curBook + '.md';
+  dirty = false;
+  setReadMode(false);
+  $('editBox').focus();
+}
+
+async function saveEdit() {
+  if (!editing || !curBook) return;
+  try {
+    await api('/api/save', { list: curList, title: curBook, content: $('editBox').value });
+    dirty = false;
+    setReadMode(true);
+    showContent(curList, curBook);
+    toast(t('saved')(curBook));
+    status(t('savedStatus')(curBook));
+  } catch (e) { toast(t('saveFail') + e.message); }
+}
+
+// ---------- 添加 / 删除 ----------
+function openAdd() {
+  if (!curList) { toast(t('pickAdd')); return; }
+  $('addListName').textContent = '「' + curList + '」';
+  $('fTitle').value = ''; $('fAuthor').value = ''; $('fIntro').value = '';
+  $('addMask').classList.add('show');
+  $('fTitle').focus();
+}
+
+async function doAdd() {
+  const title = $('fTitle').value.trim();
+  if (!title) { toast(t('noTitle')); return; }
+  try {
+    const r = await api('/api/add', { list: curList, title: title, author: $('fAuthor').value.trim(), intro: $('fIntro').value.trim() });
+    $('addMask').classList.remove('show');
+    curBook = r.title;
+    exitEdit(); setReadMode(true);
+    await loadBooks(curList);
+    await loadLists();
+    renderLists($('search').value);
+    enterEdit();
+    toast(t('added')(r.title));
+    status(t('addedTo')(r.title, curList));
+  } catch (e) { toast(t('addFail') + e.message); }
+}
+
+async function delBook() { await delBookAt(curBook); }
+
+// 删除任意文章（右键菜单可指向非当前选中篇目）
+async function delBookAt(gone) {
+  if (!gone) { toast(t('delPick')); return; }
+  if (!guardDiscard()) return;
+  if (!confirm(t('delQ')(gone))) return;
+  try {
+    await api('/api/delete', { list: curList, title: gone });
+    if (gone === curBook) { exitEdit(); setReadMode(true); placeholder(t('deleted')(gone)); curBook = null; }
+    await loadBooks(curList);
+    await loadLists();
+    renderLists($('search').value);
+    status(t('deleted')(gone));
+  } catch (e) { toast(t('delFail') + e.message); }
+}
+
+// 重命名文章：服务端改文件名并同步正文标题行
+async function renameBook(old) {
+  if (!guardDiscard()) return;
+  const neu = (prompt(t('ctxRenPrompt')(old), old) || '').trim();
+  if (!neu || neu === old) return;
+  try {
+    const r = await api('/api/rename', { list: curList, title: old, newTitle: neu });
+    if (curBook === old) { exitEdit(); curBook = r.title; }
+    await loadBooks(curList);
+    await loadLists();
+    renderLists($('search').value);
+    if (curBook) showContent(curList, curBook);
+    toast(t('renamed')(r.title));
+  } catch (e) { toast(t('renFail') + e.message); }
+}
+
+// 导出：md 直接下载；pdf 走打印视图（选“另存为 PDF”），零依赖
+async function exportBook(title, fmt) {
+  try {
+    const data = await api('/api/content?list=' + encodeURIComponent(curList) + '&title=' + encodeURIComponent(title));
+    const md = data.markdown;
+    if (fmt === 'md') {
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = title + '.md';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast(t('exported')(title + '.md'));
+      return;
+    }
+    const html = (window.__noMarked || typeof marked === 'undefined') ? simpleMarkdown(md) : marked.parse(md);
+    const w = window.open('', '_blank');
+    if (!w) { toast(t('exportFail') + t('popupBlock')); return; }
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>' +
+      'body{font-family:"Microsoft YaHei UI","Microsoft YaHei",serif;max-width:760px;margin:0 auto;padding:42px 30px;color:#22262C;line-height:1.9;font-size:14px}' +
+      'h2{font-size:22px;color:#1D4ED8;margin:14px 0}h3{font-size:16px;margin:20px 0 8px;border-left:4px solid #3A6DF0;padding-left:8px}' +
+      'blockquote{background:#F2F6FC;border-left:3px solid #3A6DF0;padding:10px 16px;color:#46536B;margin:8px 0;border-radius:0 6px 6px 0}' +
+      'p{margin:8px 0;text-indent:2em}pre{background:#EEF1F6;padding:12px;white-space:pre-wrap}' +
+      '@media print{body{padding:0}}</style></head><body>' + html + '</body></html>');
+    w.document.close();
+    toast(t('pdfHint'));
+    setTimeout(() => { w.focus(); w.print(); }, 500);
+  } catch (e) { toast(t('exportFail') + e.message); }
+}
+
+// ---------- 导入外部文件（md/txt/html/docx/epub/pdf/json/csv） ----------
+function importFile() {
+  if (!curList) { toast(t('importPick')); return; }
+  if (!guardDiscard()) return;
+  $('fileImport').click();
+}
+
+$('fileImport').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const list = curList;
+  status(t('importing') + ' ' + f.name);
+  const fd = new FormData();
+  fd.append('list', list);
+  fd.append('file', f);
+  try {
+    const res = await fetch('/api/import', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    curBook = data.title;
+    exitEdit(); setReadMode(true);
+    await loadBooks(list);
+    await loadLists();
+    renderLists($('search').value);
+    showContent(list, curBook);
+    toast(t('importOk')(curBook));
+    status(list + ' · ' + curBook);
+  } catch (err) {
+    toast(t('importFail') + err.message);
+    status(t('statusReady'));
+  }
+};
+
+async function refreshAll() {
+  if (!guardDiscard()) return;
+  exitEdit();
+  await loadLists();
+  if (curList) { await loadBooks(curList); renderLists($('search').value); }
+  toast(t('refreshed'));
+}
+
+// ---------- 事件绑定 ----------
+$('search').addEventListener('input', e => renderLists(e.target.value));
+$('catBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  $('catPop').classList.toggle('show');
+});
+$('catPop').addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', () => $('catPop').classList.remove('show'));
+document.addEventListener('click', hideCtx);
+document.addEventListener('contextmenu', hideCtx);
+$('tbRead').onclick = async () => { if (guardDiscard()) { exitEdit(); if (curBook) showContent(curList, curBook); } };
+$('tbEdit').onclick = () => { if (guardDiscard()) enterEdit(); };
+$('tbAdd').onclick = openAdd;
+$('tbDel').onclick = delBook;
+$('btnSave').onclick = saveEdit;
+$('btnCancel').onclick = () => { if (!dirty || confirm(t('discardQ'))) { exitEdit(); if (curBook) showContent(curList, curBook); } };
+$('btnAddOk').onclick = doAdd;
+$('btnAddCancel').onclick = () => $('addMask').classList.remove('show');
+$('btnRefreshTop').onclick = refreshAll;
+$('editBox').addEventListener('input', () => { dirty = true; });
+// ---------- 基础菜单栏 ----------
+function closeMenus() { document.querySelectorAll('.menubar .menu.open').forEach(m => m.classList.remove('open')); }
+document.querySelectorAll('.menubar .menu').forEach(m => {
+  m.addEventListener('click', e => {
+    if (e.target.closest('.mi')) return;
+    const was = m.classList.contains('open');
+    closeMenus();
+    if (!was) m.classList.add('open');
+    e.stopPropagation();
+  });
+  m.addEventListener('mouseenter', () => {
+    if (m.classList.contains('open') || !document.querySelector('.menubar .menu.open')) return;
+    closeMenus(); m.classList.add('open');
+  });
+});
+document.addEventListener('click', closeMenus);
+
+function showInfo(title, html) {
+  $('infoTitle').textContent = title;
+  $('infoBody').innerHTML = html;
+  $('infoMask').classList.add('show');
+}
+
+function menuAct(act) {
+  switch (act) {
+    case 'refresh': refreshAll(); break;
+    case 'import': importFile(); break;
+    case 'close': api('/api/window', { op: 'close' }).catch(() => toast(t('winCloseFail'))); window.close(); break;
+    case 'edit': if (guardDiscard()) enterEdit(); break;
+    case 'save': saveEdit(); break;
+    case 'cancel': if (!dirty || confirm(t('discardQ'))) { exitEdit(); if (curBook) showContent(curList, curBook); } break;
+    case 'add': openAdd(); break;
+    case 'del': delBook(); break;
+    case 'read': if (guardDiscard()) { exitEdit(); if (curBook) showContent(curList, curBook); } break;
+    case 'full': document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => toast(t('f11hint')));
+      break;
+    case 'lang-zh': if (curLang !== 'zh') setLang('zh'); break;
+    case 'lang-en': if (curLang !== 'en') setLang('en'); break;
+    case 'theme-day': setTheme('day'); break;
+    case 'theme-night': setTheme('night'); break;
+    case 'keys': showInfo(t('keysTitle'), t('keysBody'));
+      break;
+    case 'about': showInfo(t('aboutTitle'), t('aboutBody'));
+      break;
+  }
+}
+document.querySelectorAll('.menubar button.mi').forEach(b =>
+  b.addEventListener('click', e => { e.stopPropagation(); closeMenus(); menuAct(b.dataset.act); }));
+// 点击“语言/主题”父项只展开子菜单，不关闭菜单
+document.querySelectorAll('.menubar .mi.ms').forEach(m =>
+  m.addEventListener('click', e => e.stopPropagation()));
+
+$('btnInfoOk').onclick = () => $('infoMask').classList.remove('show');
+$('infoMask').addEventListener('click', e => { if (e.target === $('infoMask')) $('infoMask').classList.remove('show'); });
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveEdit(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') { e.preventDefault(); if (guardDiscard()) enterEdit(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); importFile(); }
+  if (e.key === 'F5' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); refreshAll(); }
+  if (e.key === 'Escape') {
+    hideCtx();
+    closeMenus();
+    $('infoMask').classList.remove('show');
+    if ($('addMask').classList.contains('show')) $('addMask').classList.remove('show');
+  }
+});
+window.addEventListener('beforeunload', e => { if (editing && dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// 启动时恢复上次选择的主题与语言
+setTheme(localStorage.getItem('bnTheme') === 'night' ? 'night' : 'day');
+applyStaticTexts(); updateMenuChecks();
+loadLists();
+</script>
+</body>
+</html>
