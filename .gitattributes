@@ -1,0 +1,9 @@
+# 统一换行符：仓库内以 LF 存储，避免跨平台 diff 噪音
+* text=auto
+*.go    text eol=lf
+*.html  text eol=lf
+*.mod   text eol=lf
+*.md    text
+*.bat   text eol=crlf
+*.png   binary
+*.jpg   binary
