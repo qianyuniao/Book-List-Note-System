@@ -13,7 +13,15 @@
 │   ├── scraper/main.go      # 爬虫：抓取微信读书 API，生成 INDEX.md 与 books/ 笔记
 │   └── server/              # 本地 Web 服务（默认端口 8327）兼桌面程序
 │       ├── main.go          #   JSON API + 启动自动打开 Edge 应用模式窗口
-│       └── index.html       #   前端单页（go:embed 内置，书单浏览/编辑/添加/删除）
+│       ├── importfile.go    #   导入文件多格式转换（md/txt/html/docx/epub/pdf/json/csv）
+│       ├── index.html       #   前端单页（go:embed 内置，浏览/编辑/添加/删除/导入/右键菜单）
+│       ├── window_windows.go #  Windows 窗口控制（Win32 user32.dll）
+│       ├── window_other.go   #  非 Windows 平台空实现
+│       └── pic/logo.png      #  应用图标（go:embed 内置）
+├── scanempty/               # 工具：扫描缺简介的笔记，输出 empty_list.txt
+├── applyappend/             # 工具：把 supplement/batchNN.md 补全内容追加进对应笔记
+├── migratetemp/             # 工具：把 temp/ 扁平缓存归档到分类子目录（幂等）
+├── supplement/              # 手工补全内容源：batchNN.md（内容简介/核心观点/金句摘录）
 ├── start-desktop.bat        # 双击启动桌面窗口（有 exe 用 exe，否则 go run）
 ├── books/                   # 数据产物：100 个书单目录，约 3000 篇划线笔记 md
 ├── INDEX.md                 # 数据产物：书单总索引（由爬虫生成，勿手改）
@@ -27,16 +35,29 @@
 └── .gitignore
 ```
 
+## 运行环境
+
+| 依赖 | 要求 | 说明 |
+| :--- | :--- | :--- |
+| Go | 1.16+ | 仅 `go run` / 自行编译时需要；拿到现成 exe 则无需安装 Go |
+| 浏览器 | Edge 或 Chrome | 桌面窗口以其“应用模式”渲染；都没有则手动开任意浏览器访问网页 |
+| 操作系统 | Windows | 窗口控制调用 Win32 API；非 Windows 下服务照常可用，仅无独立窗口特效 |
+
+**零第三方依赖**：`go.mod` 不含任何外部库，克隆后无需 `go mod download`，直接可跑。
+
 ## 快速开始
 
-### 桌面窗口（推荐，双击即用）
+### 方式一：桌面窗口（推荐，双击即用）
 
-双击 `start-desktop.bat`，自动弹出独立的应用窗口（Edge 应用模式，无地址栏，观感同原生软件）：
+双击 `start-desktop.bat`，自动弹出独立应用窗口（Edge 应用模式，无地址栏，观感同原生软件）：
 
 | 功能 | 说明 |
 | :--- | :--- |
 | 三栏浏览 | 书单（可搜索）→ 书籍 → 渲染后的划线笔记 |
 | 右侧工具条 | ⌂ 阅读｜✎ 编辑（Ctrl+S 保存）｜✚ 添加书籍｜✕ 删除书籍 |
+| 文件菜单 | 导入外部文件转笔记（md/txt/html/docx/epub/pdf/json/csv，Ctrl+O） |
+| 右键操作 | 分类标签：重命名 / 删除 / 恢复；文章：重命名 / 导出 Markdown / 导出 PDF / 删除 |
+| 主题与语言 | 白天 / 黑夜高对比主题、中英双语，偏好自动记忆（localStorage） |
 | 未保存保护 | 切换/刷新时弹窗确认，关闭页面前拦截 |
 | 刷新 | 标题栏 ⟳ 或 F5 重扫 books/ 目录 |
 
@@ -48,15 +69,28 @@
 go run ./cmd/server            # 首次稍等编译；可选参数：-addr :9000 -dir books -no-browser
 ```
 
+### 方式二：构建可执行文件（免 Go 环境分发）
+
+```powershell
+go build -o weread-server.exe  ./cmd/server     # 桌面/网页服务
+go build -o weread-scraper.exe ./cmd/scraper    # 爬虫
+```
+
+构建后 `start-desktop.bat` 会优先双击启动 exe，目标机器无需安装 Go。
+
+### 数据维护工具（可选）
+
+```powershell
+go run ./scanempty             # 扫描缺“内容简介”的笔记 → empty_list.txt
+go run ./applyappend supplement\batchNN.md   # 将手工补全内容追加进对应笔记
+go run ./migratetemp           # 归档 temp/ 扁平缓存到子目录（幂等）
+```
+
 ### 爬虫（重新生成数据）
 
 ```powershell
-go run ./cmd/scraper           # 必须在项目根目录运行
+go run ./cmd/scraper           # 必须在项目根目录运行（构建方式见上方“方式二”）
 ```
-
-> 仓库不内置编译产物（`*.exe` 已被 .gitignore 排除）。需要 exe 时自行构建：
-> `go build -o weread-server.exe ./cmd/server`、`go build -o weread-scraper.exe ./cmd/scraper`
-> 构建好后 `start-desktop.bat` 会直接双击启动，无需 Go 环境。
 
 - **缓存模式**（默认）：`temp/` 命中时约 3 秒离线完成。
   ⚠️ 重抓会重写 `books/` 下全部笔记，**手工补全的简介/观点/金句章节会被覆盖**，请谨慎执行。
@@ -79,6 +113,8 @@ go run ./cmd/scraper           # 必须在项目根目录运行
 - `POST /api/save` `{list,title,content}` — 保存笔记修改
 - `POST /api/add` `{list,title,author,intro}` — 新增书籍笔记（文件名自动过滤非法字符，同名拒绝）
 - `POST /api/delete` `{list,title}` — 删除书籍笔记
+- `POST /api/rename` `{list,title,newTitle}` — 重命名笔记（同步正文标题行，非法字符过滤、同名拒绝）
+- `POST /api/import` multipart `{list,file}` — 导入外部文件转为笔记（md/txt/html/docx/epub/pdf/json/csv）
 
 所有写接口均带路径穿越防护（结果必须落在 books/ 内）。
 
